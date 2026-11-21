@@ -1,0 +1,17 @@
+{
+  "short_name": "PlantAI",
+  "name": "PlantAI • Botanical Intelligence",
+  "description": "Organic Brutalist Botanical Intelligence Engine & Plant Pathology Suite",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512"
+    }
+  ],
+  "start_url": "./",
+  "background_color": "#DCE7D5",
+  "theme_color": "#DCE7D5",
+  "display": "standalone",
+  "orientation": "portrait"
+}
