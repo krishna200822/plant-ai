@@ -64,11 +64,16 @@ export default function ApiKeyModal({ isOpen, onClose }) {
     setKeyStatuses(prev => ({ ...prev, [index]: { status: 'testing' } }));
 
     try {
-      await testSingleApiKey(keyToTest);
+      const res = await testSingleApiKey(keyToTest);
       sounds.playSuccessChime();
       setKeyStatuses(prev => ({ 
         ...prev, 
-        [index]: { status: 'success', message: 'Verified & active for Gemini multimodal vision' } 
+        [index]: { 
+          status: 'success', 
+          message: res?.model 
+            ? `Verified! Connected to Gemini (${res.model})` 
+            : 'Verified & active for Gemini multimodal vision' 
+        } 
       }));
     } catch (err) {
       sounds.playAlertChime();

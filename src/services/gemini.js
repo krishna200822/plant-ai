@@ -11,10 +11,10 @@ const keyModelCache = new Map();
 const FALLBACK_CANDIDATE_MODELS = [
   'gemini-2.0-flash',
   'gemini-1.5-flash',
-  'gemini-1.5-flash-latest',
+  'gemini-3.6-flash',
   'gemini-2.0-flash-exp',
   'gemini-1.5-pro',
-  'gemini-1.5-pro-latest'
+  'gemini-1.5-flash-latest'
 ];
 
 export function getStoredApiKeys() {
@@ -139,6 +139,14 @@ export async function testSingleApiKey(keyToTest) {
   }
 
   const cleanKey = keyToTest.trim();
+
+  // Helpful sanity check: Google AI Studio keys standardly start with AIzaSy
+  if (!cleanKey.startsWith('AIzaSy') && cleanKey.startsWith('AQ.')) {
+    throw new Error(
+      'This key starts with "AQ." which is not a standard Google AI Studio key. Google AI Studio keys start with "AIzaSy...". Please get a free key from https://aistudio.google.com/app/apikey.'
+    );
+  }
+
   let lastError = null;
 
   // 1. Try ListModels first (the official verification endpoint recommended by Google)
@@ -152,8 +160,15 @@ export async function testSingleApiKey(keyToTest) {
           .map(m => m.name.replace(/^models\//, ''));
 
         if (available.length > 0) {
+          // Put flash models first
+          available.sort((a, b) => {
+            if (a.includes('flash') && !b.includes('flash')) return -1;
+            if (!a.includes('flash') && b.includes('flash')) return 1;
+            return 0;
+          });
+
           keyModelCache.set(cleanKey, { apiVer, models: available });
-          return true; // Verified!
+          return { ok: true, model: available[0], apiVer };
         }
       } else {
         const errJson = await listRes.json().catch(() => ({}));
@@ -176,19 +191,18 @@ export async function testSingleApiKey(keyToTest) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              contents: [{ parts: [{ text: "hi" }] }]
+              contents: [{ parts: [{ text: "ping" }] }]
             })
           }
         );
 
         if (res.ok) {
           keyModelCache.set(cleanKey, { apiVer, models: [model, ...FALLBACK_CANDIDATE_MODELS] });
-          return true; // Verified!
+          return { ok: true, model, apiVer };
         }
 
         const errData = await res.json().catch(() => ({}));
         if (errData.error?.message) {
-          // If message is not generic "not found", keep it as error
           if (!errData.error.message.includes('not found')) {
             lastError = new Error(errData.error.message);
           }
@@ -199,7 +213,12 @@ export async function testSingleApiKey(keyToTest) {
     }
   }
 
-  throw lastError || new Error('API key could not be verified. Ensure it is copied from Google AI Studio (aistudio.google.com).');
+  // If the error contains "API_KEY_INVALID" or similar
+  if (lastError?.message?.includes('API_KEY_INVALID') || lastError?.message?.includes('API key not valid')) {
+    throw new Error('Invalid Google API key. Please check your key at https://aistudio.google.com/app/apikey.');
+  }
+
+  throw lastError || new Error('API key verification failed. Make sure you are using a key from Google AI Studio (aistudio.google.com).');
 }
 
 const SYSTEM_PROMPT = `
