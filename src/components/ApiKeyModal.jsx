@@ -8,7 +8,8 @@ import {
   AlertCircle, 
   Trash2, 
   Plus, 
-  Sparkles 
+  Sparkles,
+  Info
 } from 'lucide-react';
 import { 
   getStoredApiKeys, 
@@ -35,7 +36,7 @@ export default function ApiKeyModal({ isOpen, onClose }) {
 
     rawInputs.forEach(inputKey => {
       const trimmed = inputKey.trim();
-      if (trimmed.length > 10 && !updated.includes(trimmed)) {
+      if (trimmed.length > 6 && !updated.includes(trimmed)) {
         updated.push(trimmed);
       }
     });
@@ -65,7 +66,10 @@ export default function ApiKeyModal({ isOpen, onClose }) {
     try {
       await testSingleApiKey(keyToTest);
       sounds.playSuccessChime();
-      setKeyStatuses(prev => ({ ...prev, [index]: { status: 'success' } }));
+      setKeyStatuses(prev => ({ 
+        ...prev, 
+        [index]: { status: 'success', message: 'Verified & active for Gemini multimodal vision' } 
+      }));
     } catch (err) {
       sounds.playAlertChime();
       setKeyStatuses(prev => ({ 
@@ -87,7 +91,7 @@ export default function ApiKeyModal({ isOpen, onClose }) {
   };
 
   const maskKey = (k) => {
-    if (!k || k.length < 12) return '••••••••••••';
+    if (!k || k.length < 8) return '••••••••••••';
     return `${k.slice(0, 6)}••••••••••••${k.slice(-4)}`;
   };
 
@@ -103,10 +107,10 @@ export default function ApiKeyModal({ isOpen, onClose }) {
             </div>
             <div>
               <h3 className="font-anton text-2xl uppercase tracking-wider text-[#0E2316]">
-                GEMINI 3.6 FLASH POOL
+                GEMINI MULTI-KEY POOL
               </h3>
               <p className="font-mono-brutal text-[10px] text-[#3B6648] uppercase font-bold">
-                [{keys.length} KEYS CONFIGURED • AUTO-FAILOVER READY]
+                [{keys.length} KEYS CONFIGURED • AUTO-MODEL RESOLUTION]
               </p>
             </div>
           </div>
@@ -122,20 +126,28 @@ export default function ApiKeyModal({ isOpen, onClose }) {
           </button>
         </div>
 
-        {/* Explain the Automatic Failover System */}
+        {/* Explain the Automatic Model Discovery System */}
         <div className="space-y-4 mb-6">
           <div className="p-4 rounded-3xl bg-[#CEDDC5] border border-[#0E2316]/10 flex items-start space-x-3 text-xs text-[#0E2316]">
             <Sparkles className="w-5 h-5 text-[#3B6648] shrink-0 mt-0.5" />
             <p className="leading-relaxed">
-              <span className="font-bold">Next-Gen Gemini 3.6 Flash Engine: </span>
-              Your scans and consultations execute natively using Google's ultra-fast <strong>Gemini 3.6 Flash</strong> multimodal vision model with sub-second inference. If Key #1 reaches quota caps, PlantAI automatically cascades to Key #2 and #3.
+              <span className="font-bold">Dynamic Model Discovery: </span>
+              PlantAI now automatically invokes <code className="font-mono-brutal bg-white/70 px-1 py-0.5 rounded text-[11px]">ModelService.ListModels</code> on your key to detect which Gemini models are enabled on your account, automatically bypassing version conflicts!
+            </p>
+          </div>
+
+          {/* Key format hint */}
+          <div className="p-3.5 rounded-2xl bg-white/70 border border-[#0E2316]/15 flex items-start space-x-2.5 text-xs text-[#0E2316]">
+            <Info className="w-4 h-4 text-[#3B6648] shrink-0 mt-0.5" />
+            <p className="text-[11px] leading-relaxed">
+              <strong>Tip:</strong> Free Gemini API keys from Google AI Studio usually begin with <code className="font-mono font-bold text-[#0E2316] bg-[#DCE7D5] px-1 py-0.5 rounded">AIzaSy...</code>. You can generate one in 10 seconds at <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="underline font-bold text-[#153823]">aistudio.google.com/app/apikey</a>.
             </p>
           </div>
 
           {/* Add Key Input Form */}
           <div className="p-4 rounded-3xl bg-white border-2 border-[#0E2316]/15 space-y-3">
             <label className="block font-mono-brutal text-xs font-bold uppercase text-[#0E2316]">
-              ADD KEY TO 3.6 FLASH POOL:
+              ADD KEY TO FAILOVER POOL:
             </label>
             <div className="flex gap-2">
               <input
@@ -161,7 +173,7 @@ export default function ApiKeyModal({ isOpen, onClose }) {
           <div className="space-y-3">
             <div className="flex items-center justify-between font-mono-brutal text-xs font-bold uppercase text-[#0E2316] px-1">
               <span>CONFIGURED KEYS ({keys.length}):</span>
-              <span className="text-[#3B6648] text-[10px]">GEMINI 3.6 FLASH ACTIVE</span>
+              <span className="text-[#3B6648] text-[10px]">AUTO-RESOLVING ENDPOINTS</span>
             </div>
 
             {keys.length === 0 ? (
@@ -191,7 +203,7 @@ export default function ApiKeyModal({ isOpen, onClose }) {
                             {maskKey(keyStr)}
                           </p>
                           <span className="text-[10px] font-mono-brutal text-[#3B6648] font-bold">
-                            {idx === 0 ? 'PRIMARY 3.6 FLASH KEY' : `FAILOVER TIER #${idx}`}
+                            {idx === 0 ? 'PRIMARY KEY' : `FAILOVER TIER #${idx}`}
                           </span>
                         </div>
                       </div>
@@ -201,7 +213,7 @@ export default function ApiKeyModal({ isOpen, onClose }) {
                           type="button"
                           onClick={() => handleTestKey(keyStr, idx)}
                           disabled={isTesting}
-                          className="px-3 py-1.5 rounded-full bg-[#DCE7D5] hover:bg-[#CEDDC5] text-[#0E2316] font-mono-brutal text-[11px] font-bold uppercase transition-all"
+                          className="px-3.5 py-1.5 rounded-full bg-[#DCE7D5] hover:bg-[#CEDDC5] text-[#0E2316] font-mono-brutal text-[11px] font-bold uppercase transition-all"
                         >
                           {isTesting ? 'VERIFYING...' : 'TEST KEY'}
                         </button>
@@ -220,16 +232,21 @@ export default function ApiKeyModal({ isOpen, onClose }) {
                     {/* Status feedback */}
                     {status?.status === 'success' && (
                       <p className="text-[11px] font-mono-brutal text-[#3B6648] flex items-center space-x-1 font-bold">
-                        <Check className="w-3.5 h-3.5" />
-                        <span>AUTHENTICATED FOR GEMINI 3.6 FLASH</span>
+                        <Check className="w-3.5 h-3.5 text-[#3B6648]" />
+                        <span>{status.message || 'AUTHENTICATED SUCCESSFULLY'}</span>
                       </p>
                     )}
 
                     {status?.status === 'error' && (
-                      <p className="text-[11px] font-mono-brutal text-rose-600 flex items-center space-x-1 font-bold">
-                        <AlertCircle className="w-3.5 h-3.5" />
-                        <span>{status.message || 'Key rejected by Google AI Studio'}</span>
-                      </p>
+                      <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-mono-brutal space-y-1">
+                        <div className="flex items-center space-x-1 font-bold">
+                          <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                          <span>Verification Error:</span>
+                        </div>
+                        <p className="font-sans leading-relaxed text-[11px] text-rose-900 font-normal">
+                          {status.message}
+                        </p>
+                      </div>
                     )}
                   </div>
                 );

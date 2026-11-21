@@ -1,26 +1,35 @@
 // Google Gemini Multimodal Vision Service for PlantAI
-// Powered by Gemini 3.6 Flash with Multi-Key Failover & Resilient Fallbacks
+// Automatic Model Discovery & Resilient Multi-Key Failover Engine
 
 const API_KEYS_STORAGE_KEY = 'plantai_gemini_api_keys';
 const LEGACY_KEY_STORAGE = 'plantai_gemini_api_key';
 
-// Model hierarchy: Primary is Gemini 3.6 Flash with 2.5 and 1.5 failovers
-export const GEMINI_MODELS = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+// Cache discovered models for each key: key -> { apiVer, models: string[] }
+const keyModelCache = new Map();
 
-// Retrieve all stored API keys as an array of strings
+// Standard models to check in priority order
+const FALLBACK_CANDIDATE_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-latest',
+  'gemini-2.0-flash-exp',
+  'gemini-1.5-pro',
+  'gemini-1.5-pro-latest'
+];
+
 export function getStoredApiKeys() {
   try {
     const raw = localStorage.getItem(API_KEYS_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        return parsed.filter(k => typeof k === 'string' && k.trim().length > 10);
+        return parsed.filter(k => typeof k === 'string' && k.trim().length > 6);
       }
     }
   } catch {}
 
   const legacy = localStorage.getItem(LEGACY_KEY_STORAGE);
-  if (legacy && legacy.trim().length > 10) {
+  if (legacy && legacy.trim().length > 6) {
     const migrated = [legacy.trim()];
     localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(migrated));
     return migrated;
@@ -32,7 +41,7 @@ export function getStoredApiKeys() {
 export function saveApiKeys(keysArray) {
   const cleaned = keysArray
     .map(k => (typeof k === 'string' ? k.trim() : ''))
-    .filter(k => k.length > 10);
+    .filter(k => k.length > 6);
   
   localStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(cleaned));
   if (cleaned.length > 0) {
@@ -47,7 +56,7 @@ export function addApiKey(newKey) {
   if (!newKey || typeof newKey !== 'string') return getStoredApiKeys();
   const current = getStoredApiKeys();
   const trimmed = newKey.trim();
-  if (trimmed.length > 10 && !current.includes(trimmed)) {
+  if (trimmed.length > 6 && !current.includes(trimmed)) {
     const updated = [...current, trimmed];
     return saveApiKeys(updated);
   }
@@ -67,7 +76,6 @@ export function hasApiKey() {
   return getStoredApiKeys().length > 0;
 }
 
-// Convert File/Blob to base64
 export function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -85,42 +93,117 @@ export function fileToBase64(file) {
   });
 }
 
-// Test an individual key with Gemini 3.6 Flash / fallback
-export async function testSingleApiKey(keyToTest) {
-  if (!keyToTest || keyToTest.trim().length < 10) {
-    throw new Error('Key format invalid');
+// Dynamically discover which models are enabled for this specific key
+export async function discoverSupportedModels(apiKey) {
+  if (keyModelCache.has(apiKey)) {
+    return keyModelCache.get(apiKey);
   }
 
-  let lastError = null;
-
-  for (const model of GEMINI_MODELS) {
+  for (const apiVer of ['v1beta', 'v1']) {
     try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${keyToTest.trim()}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: "ping" }] }]
-          })
-        }
-      );
-
+      const res = await fetch(`https://generativelanguage.googleapis.com/${apiVer}/models?key=${apiKey}`);
       if (res.ok) {
-        return true;
+        const data = await res.json();
+        const available = (data.models || [])
+          .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+          .map(m => m.name.replace(/^models\//, ''));
+
+        if (available.length > 0) {
+          // Sort so flash models come first for fastest inference
+          available.sort((a, b) => {
+            if (a.includes('flash') && !b.includes('flash')) return -1;
+            if (!a.includes('flash') && b.includes('flash')) return 1;
+            return 0;
+          });
+
+          const config = { apiVer, models: available };
+          keyModelCache.set(apiKey, config);
+          return config;
+        }
       }
-      const errBody = await res.json().catch(() => ({}));
-      lastError = new Error(errBody.error?.message || `HTTP ${res.status} on ${model}`);
-    } catch (e) {
-      lastError = e;
+    } catch (err) {
+      console.warn(`Model discovery on ${apiVer} failed:`, err);
     }
   }
 
-  throw lastError || new Error('Verification failed across models');
+  // Fallback candidate list if ListModels is restricted
+  const fallback = { apiVer: 'v1beta', models: FALLBACK_CANDIDATE_MODELS };
+  keyModelCache.set(apiKey, fallback);
+  return fallback;
+}
+
+// Test an individual key with automatic ModelService discovery
+export async function testSingleApiKey(keyToTest) {
+  if (!keyToTest || keyToTest.trim().length < 6) {
+    throw new Error('Please enter a valid Google AI Studio key.');
+  }
+
+  const cleanKey = keyToTest.trim();
+  let lastError = null;
+
+  // 1. Try ListModels first (the official verification endpoint recommended by Google)
+  for (const apiVer of ['v1beta', 'v1']) {
+    try {
+      const listRes = await fetch(`https://generativelanguage.googleapis.com/${apiVer}/models?key=${cleanKey}`);
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        const available = (listData.models || [])
+          .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+          .map(m => m.name.replace(/^models\//, ''));
+
+        if (available.length > 0) {
+          keyModelCache.set(cleanKey, { apiVer, models: available });
+          return true; // Verified!
+        }
+      } else {
+        const errJson = await listRes.json().catch(() => ({}));
+        if (errJson.error?.message) {
+          lastError = new Error(errJson.error.message);
+        }
+      }
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  // 2. Direct ping test across candidate models
+  for (const apiVer of ['v1beta', 'v1']) {
+    for (const model of FALLBACK_CANDIDATE_MODELS) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/${apiVer}/models/${model}:generateContent?key=${cleanKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: "hi" }] }]
+            })
+          }
+        );
+
+        if (res.ok) {
+          keyModelCache.set(cleanKey, { apiVer, models: [model, ...FALLBACK_CANDIDATE_MODELS] });
+          return true; // Verified!
+        }
+
+        const errData = await res.json().catch(() => ({}));
+        if (errData.error?.message) {
+          // If message is not generic "not found", keep it as error
+          if (!errData.error.message.includes('not found')) {
+            lastError = new Error(errData.error.message);
+          }
+        }
+      } catch (e) {
+        lastError = e;
+      }
+    }
+  }
+
+  throw lastError || new Error('API key could not be verified. Ensure it is copied from Google AI Studio (aistudio.google.com).');
 }
 
 const SYSTEM_PROMPT = `
-You are PlantAI Core powered by Gemini 3.6 Flash, a world-class botanical scientist and plant pathologist with deep expertise in horticulture, taxonomy, and phytopathology.
+You are PlantAI Core, a world-class botanical scientist and plant pathologist with deep expertise in horticulture, taxonomy, and phytopathology.
 
 Analyze the uploaded plant image and return a strictly valid, single JSON object (with NO markdown formatting, NO backticks, NO extra commentary) with the following exact structure:
 {
@@ -184,7 +267,7 @@ Analyze the uploaded plant image and return a strictly valid, single JSON object
 }
 `;
 
-// Analyze image using Gemini 3.6 Flash with multi-key failover
+// Analyze image with dynamic model discovery and multi-key failover
 export async function analyzePlantImage(base64Data, mimeType = 'image/jpeg') {
   const keys = getStoredApiKeys();
 
@@ -194,15 +277,17 @@ export async function analyzePlantImage(base64Data, mimeType = 'image/jpeg') {
 
   let lastError = null;
 
-  // Failover Loop: Iterate through each key
+  // Failover across all keys in pool
   for (let keyIdx = 0; keyIdx < keys.length; keyIdx++) {
     const currentKey = keys[keyIdx];
-    console.log(`[PlantAI Engine] Invoking Gemini 3.6 Flash with Key #${keyIdx + 1} of ${keys.length}...`);
+    
+    // Discover the exact models available for this specific key
+    const { apiVer, models } = await discoverSupportedModels(currentKey);
 
-    for (const model of GEMINI_MODELS) {
+    for (const model of models) {
       try {
         const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`,
+          `https://generativelanguage.googleapis.com/${apiVer}/models/${model}:generateContent?key=${currentKey}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -239,7 +324,7 @@ export async function analyzePlantImage(base64Data, mimeType = 'image/jpeg') {
         const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (!rawText) {
-          throw new Error('Empty response from Gemini 3.6 Flash');
+          throw new Error('Empty response from vision model');
         }
 
         const cleaned = rawText
@@ -248,29 +333,29 @@ export async function analyzePlantImage(base64Data, mimeType = 'image/jpeg') {
           .trim();
 
         const parsed = JSON.parse(cleaned);
-        console.log(`[PlantAI Engine] Successfully analyzed via ${model} on Key #${keyIdx + 1}!`);
+        console.log(`[PlantAI] Successfully analyzed via ${model} on Key #${keyIdx + 1}!`);
         return parsed;
 
       } catch (err) {
         lastError = err;
-        console.warn(`[PlantAI Engine] Attempt failed on ${model} (Key #${keyIdx + 1}):`, err.message);
+        console.warn(`[PlantAI] Attempt failed on ${model} (Key #${keyIdx + 1}):`, err.message);
       }
     }
   }
 
-  throw lastError || new Error(`All ${keys.length} API keys exhausted on Gemini 3.6 Flash.`);
+  throw lastError || new Error(`All ${keys.length} API keys in your pool failed.`);
 }
 
-// Consult Plant Doctor with Gemini 3.6 Flash
+// Consult Plant Doctor with dynamic model resolution
 export async function askPlantDoctor(plantDossier, chatHistory, userQuestion) {
   const keys = getStoredApiKeys();
 
   if (keys.length === 0) {
-    return `[PlantAI Doctor Simulation]: Based on ${plantDossier.commonName}'s biological dossier, its primary need is ${plantDossier.vitals?.watering?.rule || 'regular moisture check'}. To address "${userQuestion}", check soil drainage and lighting (${plantDossier.vitals?.sunlight?.level || 'bright indirect'}). (Configure your Gemini 3.6 Flash API key for live real-time AI reasoning!)`;
+    return `[PlantAI Doctor Simulation]: Based on ${plantDossier.commonName}'s biological dossier, its primary need is ${plantDossier.vitals?.watering?.rule || 'regular moisture check'}. To address "${userQuestion}", check soil drainage and lighting (${plantDossier.vitals?.sunlight?.level || 'bright indirect'}). (Configure your Gemini API key for live real-time AI reasoning!)`;
   }
 
   const systemContext = `
-You are the PlantAI Botanical Doctor powered by Gemini 3.6 Flash.
+You are the PlantAI Botanical Doctor.
 The user is asking about their specific plant:
 - Name: ${plantDossier.commonName} (${plantDossier.scientificName})
 - Family: ${plantDossier.family}
@@ -296,11 +381,12 @@ Give a direct, concise, compassionate, and highly actionable response in 2-3 sho
 
   for (let keyIdx = 0; keyIdx < keys.length; keyIdx++) {
     const currentKey = keys[keyIdx];
+    const { apiVer, models } = await discoverSupportedModels(currentKey);
 
-    for (const model of GEMINI_MODELS) {
+    for (const model of models) {
       try {
         const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`,
+          `https://generativelanguage.googleapis.com/${apiVer}/models/${model}:generateContent?key=${currentKey}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -316,7 +402,7 @@ Give a direct, concise, compassionate, and highly actionable response in 2-3 sho
         );
 
         if (!response.ok) {
-          throw new Error(`Key #${keyIdx + 1} HTTP ${response.status}`);
+          throw new Error(`Key #${keyIdx + 1} HTTP ${response.status} on ${model}`);
         }
 
         const data = await response.json();
@@ -328,5 +414,5 @@ Give a direct, concise, compassionate, and highly actionable response in 2-3 sho
     }
   }
 
-  throw lastError || new Error('All keys failed on Gemini 3.6 Flash.');
+  throw lastError || new Error('All keys in pool failed for chat inquiry.');
 }
