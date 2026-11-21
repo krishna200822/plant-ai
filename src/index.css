@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-paper: #DCE7D5;
+    --bg-card: #FFFFFF;
+    --forest-900: #0E2316;
+    --forest-800: #153823;
+    --forest-700: #1F4E32;
+    --sage-600: #446E52;
+    --sage-400: #7E9F85;
+    --sage-200: #C2D5C6;
+    --sage-100: #E5EDE4;
+    --sage-50: #F0F5EF;
+    --pistachio: #DCE7D5;
+    --pistachio-deep: #CEDDC5;
+  }
+
+  body {
+    background-color: #DCE7D5;
+    color: #0E2316;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+}
+
+.font-anton {
+  font-family: 'Anton', sans-serif;
+  letter-spacing: 0.02em;
+}
+
+.font-mono-brutal {
+  font-family: 'Space Mono', monospace;
+}
+
+/* Organic Brutalist Bento Card Base */
+.bento-card {
+  background: #FFFFFF;
+  border: 2px solid rgba(14, 35, 22, 0.08);
+  box-shadow: 0 20px 40px -15px rgba(14, 35, 22, 0.05);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bento-card-forest {
+  background: #0E2316;
+  color: #DCE7D5;
+  border: 2px solid #0E2316;
+}
+
+.bento-card-sage {
+  background: #CEDDC5;
+  border: 2px solid rgba(14, 35, 22, 0.12);
+}
+
+.bento-interactive:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 28px 50px -15px rgba(14, 35, 22, 0.1);
+  border-color: rgba(14, 35, 22, 0.25);
+}
+
+/* Tactile Paper Film Grain Overlay */
+.film-grain {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Fluid brutalist sweep line */
+@keyframes brutal-sweep {
+  0% {
+    top: 0%;
+    transform: scaleX(0.95);
+  }
+  50% {
+    transform: scaleX(1.02);
+  }
+  100% {
+    top: 100%;
+    transform: scaleX(0.95);
+  }
+}
+
+.brutal-scanner-line {
+  animation: brutal-sweep 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #DCE7D5;
+}
+::-webkit-scrollbar-thumb {
+  background: #153823;
+  border-radius: 999px;
+}
