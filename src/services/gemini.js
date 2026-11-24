@@ -35,6 +35,20 @@ export function getStoredApiKeys() {
     return migrated;
   }
 
+  // Check for environment variable key (e.g. from Render or .env)
+  try {
+    const envKeys = import.meta.env.VITE_GEMINI_API_KEYS || import.meta.env.VITE_GEMINI_API_KEY;
+    if (envKeys && typeof envKeys === 'string') {
+      const splitKeys = envKeys
+        .split(/[\n,]+/)
+        .map(k => k.trim())
+        .filter(k => k.length > 6);
+      if (splitKeys.length > 0) {
+        return splitKeys;
+      }
+    }
+  } catch {}
+
   return [];
 }
 
