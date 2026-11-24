@@ -16,12 +16,14 @@ import {
   Sparkles,
   Cat,
   Dog,
-  Activity
+  Activity,
+  AlertTriangle,
+  Key
 } from 'lucide-react';
 import { sounds } from '../services/soundEffects';
 import { askPlantDoctor } from '../services/gemini';
 
-export default function PlantDossier({ dossier, photoUrl, onSaveToVault, isSaved }) {
+export default function PlantDossier({ dossier, photoUrl, onSaveToVault, isSaved, onOpenApiKeyModal }) {
   const [completedSteps, setCompletedSteps] = useState({});
   const [chatMessages, setChatMessages] = useState([
     {
@@ -83,6 +85,34 @@ export default function PlantDossier({ dossier, photoUrl, onSaveToVault, isSaved
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 space-y-8 animate-fadeIn">
       
+      {/* Fallback Demo Mode Alert Banner */}
+      {dossier._isFallback && (
+        <div className="p-6 rounded-[2.5rem] bg-amber-50 border-2 border-amber-300 text-[#0E2316] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-lg animate-fadeIn">
+          <div className="flex items-start space-x-3.5">
+            <div className="w-10 h-10 rounded-full bg-amber-500 text-white flex items-center justify-center shrink-0 mt-0.5">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-anton text-xl uppercase tracking-wider text-amber-950">
+                DEMO SPECIMEN ACTIVE (MONSTERA DELICIOSA)
+              </p>
+              <p className="font-sans text-xs text-amber-900 mt-1 leading-relaxed">
+                {dossier._fallbackReason === 'NO_API_KEY'
+                  ? 'No Gemini API key is configured. The scanner is showing the sample Monstera Deliciosa profile. Add your free Google AI Studio key to scan and identify your actual plant with live AI!'
+                  : `Gemini API call failed (${dossier._fallbackReason}). The app fell back to the sample Monstera Deliciosa profile.`}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => onOpenApiKeyModal?.()}
+            className="px-6 py-3 rounded-full bg-[#0E2316] hover:bg-[#153823] text-[#DCE7D5] font-anton text-xs uppercase tracking-wider shrink-0 transition-all shadow-md active:scale-95 flex items-center space-x-2"
+          >
+            <Key className="w-4 h-4" />
+            <span>CONFIGURE API KEY</span>
+          </button>
+        </div>
+      )}
+
       {/* Massive Editorial Header Bento Card */}
       <div className="bento-card-forest rounded-[3.5rem] p-8 sm:p-12 relative overflow-hidden shadow-2xl">
         

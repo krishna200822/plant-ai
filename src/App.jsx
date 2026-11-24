@@ -98,15 +98,18 @@ export default function App() {
           console.warn("API call failed, using fallback:", apiErr);
           dossier = {
             ...MOCK_SPECIMENS[0].dossier,
-            health: {
-              ...MOCK_SPECIMENS[0].dossier.health,
-              primaryIssue: `Diagnosis Synthesized (Simulated Mode: ${apiErr.message.slice(0, 35)}...)`
-            }
+            _isFallback: true,
+            _fallbackReason: apiErr.message || 'API connection failed'
           };
+          sounds.playAlertChime();
         }
       } else {
         await new Promise(r => setTimeout(r, 500));
-        dossier = MOCK_SPECIMENS[0].dossier;
+        dossier = {
+          ...MOCK_SPECIMENS[0].dossier,
+          _isFallback: true,
+          _fallbackReason: 'NO_API_KEY'
+        };
       }
 
       setScanStep('DOSSIER SYNTHESIZED.');
@@ -291,6 +294,7 @@ export default function App() {
                 photoUrl={currentImage}
                 onSaveToVault={handleSaveToVault}
                 isSaved={isCurrentSaved}
+                onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
               />
             )}
           </>
