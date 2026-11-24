@@ -7,14 +7,15 @@ const LEGACY_KEY_STORAGE = 'plantai_gemini_api_key';
 // Cache discovered models for each key: key -> { apiVer, models: string[] }
 const keyModelCache = new Map();
 
-// Standard models to check in priority order
+// Standard models to check in priority order (supporting Gemini 3.x Flash series)
 const FALLBACK_CANDIDATE_MODELS = [
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
-  'gemini-3.6-flash',
-  'gemini-2.0-flash-exp',
-  'gemini-1.5-pro',
-  'gemini-1.5-flash-latest'
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.8-flash',
+  'gemini-flash-latest',
+  'gemini-flash-lite-latest',
+  'gemini-2.5-flash',
+  'gemini-2.0-flash'
 ];
 
 export function getStoredApiKeys() {
@@ -123,11 +124,17 @@ export async function discoverSupportedModels(apiKey) {
           .map(m => m.name.replace(/^models\//, ''));
 
         if (available.length > 0) {
-          // Sort so flash models come first for fastest inference
+          // Sort so modern 3.5 flash and latest flash models come first
           available.sort((a, b) => {
-            if (a.includes('flash') && !b.includes('flash')) return -1;
-            if (!a.includes('flash') && b.includes('flash')) return 1;
-            return 0;
+            const getPriority = (name) => {
+              if (name === 'gemini-3.5-flash') return 1;
+              if (name === 'gemini-3.5-flash-lite') return 2;
+              if (name === 'gemini-flash-lite-latest') return 3;
+              if (name === 'gemini-flash-latest') return 4;
+              if (name.includes('flash')) return 5;
+              return 10;
+            };
+            return getPriority(a) - getPriority(b);
           });
 
           const config = { apiVer, models: available };
@@ -153,14 +160,6 @@ export async function testSingleApiKey(keyToTest) {
   }
 
   const cleanKey = keyToTest.trim();
-
-  // Helpful sanity check: Google AI Studio keys standardly start with AIzaSy
-  if (!cleanKey.startsWith('AIzaSy') && cleanKey.startsWith('AQ.')) {
-    throw new Error(
-      'This key starts with "AQ." which is not a standard Google AI Studio key. Google AI Studio keys start with "AIzaSy...". Please get a free key from https://aistudio.google.com/app/apikey.'
-    );
-  }
-
   let lastError = null;
 
   // 1. Try ListModels first (the official verification endpoint recommended by Google)
@@ -174,11 +173,17 @@ export async function testSingleApiKey(keyToTest) {
           .map(m => m.name.replace(/^models\//, ''));
 
         if (available.length > 0) {
-          // Put flash models first
+          // Put modern 3.5 flash and latest flash models first
           available.sort((a, b) => {
-            if (a.includes('flash') && !b.includes('flash')) return -1;
-            if (!a.includes('flash') && b.includes('flash')) return 1;
-            return 0;
+            const getPriority = (name) => {
+              if (name === 'gemini-3.5-flash') return 1;
+              if (name === 'gemini-3.5-flash-lite') return 2;
+              if (name === 'gemini-flash-lite-latest') return 3;
+              if (name === 'gemini-flash-latest') return 4;
+              if (name.includes('flash')) return 5;
+              return 10;
+            };
+            return getPriority(a) - getPriority(b);
           });
 
           keyModelCache.set(cleanKey, { apiVer, models: available });
